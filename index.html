@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rooftop Defender - Mobile Friendly</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        body {
+            background-color: #0d1117;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            max-width: 900px;
+            height: calc(100vw * 0.611);
+            max-height: 550px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.8);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        @media (max-aspect-ratio: 4/3) {
+            #game-container {
+                width: 98vw;
+                height: calc(98vw * 0.611);
+            }
+        }
+
+        canvas {
+            background: linear-gradient(to bottom, #090a0f, #121826, #1a233a);
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 10px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            font-size: clamp(12px, 3.5vw, 18px);
+            font-weight: bold;
+            pointer-events: none;
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.9);
+            z-index: 5;
+        }
+
+        #status-indicator {
+            position: absolute;
+            top: 35px;
+            left: 15px;
+            font-size: clamp(10px, 2.5vw, 14px);
+            color: #38ef7d;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #unlocked-perks-ui {
+            position: absolute;
+            top: 55px;
+            left: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .perk-badge {
+            background-color: rgba(30, 41, 59, 0.8);
+            border: 1px solid #38ef7d;
+            color: #38ef7d;
+            font-size: clamp(9px, 2vw, 12px);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .screen-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            display: none;
+            padding: 20px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .screen-overlay h1 {
+            font-size: clamp(24px, 6vw, 44px);
+            margin-bottom: 10px;
+        }
+
+        #game-over-screen h1 { color: #ff4757; }
+        #level-complete-screen h1 { color: #2ed573; }
+
+        .screen-overlay p {
+            font-size: clamp(14px, 3vw, 18px);
+            margin-bottom: 15px;
+        }
+
+        .unlock-box {
+            background: #1e293b;
+            border: 2px solid #2ed573;
+            border-radius: 8px;
+            padding: 10px 18px;
+            margin-bottom: 15px;
+            max-width: 90%;
+        }
+
+        .unlock-box h3 {
+            color: #f59e0b;
+            font-size: clamp(14px, 3.5vw, 20px);
+            margin-bottom: 5px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 18px;
+            font-size: clamp(12px, 3vw, 16px);
+            font-weight: bold;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #retry-btn { background-color: #ff4757; }
+        #reset-all-btn { background-color: #4b5563; }
+        #next-btn { background-color: #2ed573; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ui-overlay">
+            <div>Lvl: <span id="level">1</span></div>
+            <div>Kills: <span id="kills">0</span>/<span id="target">5</span></div>
+            <div>Ammo: <span id="ammo">12</span></div>
+            <div>HP: <span id="health">100</span>%</div>
+        </div>
+        <div id="status-indicator">Enemies Active</div>
+        <div id="unlocked-perks-ui"></div>
+
+        <div id="game-over-screen" class="screen-overlay">
+            <h1>LEVEL FAILED</h1>
+            <p id="fail-reason">Your building was destroyed!</p>
+            <div class="button-group">
+                <button id="retry-btn" onclick="retryCurrentLevel()">Retry</button>
+                <button id="reset-all-btn" onclick="restartFromLevel1()">Start Over</button>
+            </div>
+        </div>
+
+        <div id="level-complete-screen" class="screen-overlay">
+            <h1>LEVEL CLEARED!</h1>
+            <p>Target reached successfully!</p>
+            <div id="unlock-container" class="unlock-box" style="display: none;">
+                <h3>🔓 UNLOCKED NEW FEATURE:</h3>
+                <p id="unlock-desc">Laser Sight</p>
+            </div>
+            <button id="next-btn" onclick="nextLevel()">Next Level</button>
+        </div>
+
+        <canvas id="gameCanvas" width="900" height="550"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const levelEl = document.getElementById('level');
+        const killsEl = document.getElementById('kills');
+        const targetEl = document.getElementById('target');
+        const ammoEl = document.getElementById('ammo');
+        const healthEl = document.getElementById('health');
+        const statusEl = document.getElementById('status-indicator');
+        const perksUi = document.getElementById('unlocked-perks-ui');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const levelCompleteScreen = document.getElementById('level-complete-screen');
+        const failReasonEl = document.getElementById('fail-reason');
+        const unlockContainer = document.getElementById('unlock-container');
+        const unlockDesc = document.getElementById('unlock-desc');
+
+        let gameRunning = true;
+        let currentLevel = 1;
+        let killsCount = 0;
+        let buildingHealth = 100;
+        let healthBeforeLevelStart = 100;
+        let screenShakeTime = 0;
+        let screenShakeIntensity = 0;
+        let beaconTimer = 0;
+
+        const features = {
+            laserSight: false,       
+            highSpeedRounds: false,  
+            explosiveRounds: false,  
+            autoRepair: false        
+        };
+
+        let levelConfig = {
+            targetKills: 5,
+            ammoLimit: 12,
+            enemySpeedMin: 1.2,
+            enemySpeedMax: 1.8,
+            spawnRate: 90
+        };
+
+        const groundY = 510;
+        const building = {
+            x: 40,
+            y: 200,
+            width: 160,
+            height: 310
+        };
+
+        const player = {
+            x: building.x + building.width / 2,
+            y: building.y,
+            angle: 0,
+            recoilOffset: 0,
+            muzzleFlashTimer: 0
+        };
+
+        let bullets = [];
+        let enemies = [];
+        let particles = [];
+        let enemySpawnTimer = 0;
+        let mousePos = { x: 450, y: 275 };
+
+        function getScaledCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            }
+
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function updateAim(e) {
+            mousePos = getScaledCoords(e);
+        }
+
+        function triggerFire() {
+            if (!gameRunning) return;
+            if (levelConfig.ammoLimit <= 0) return;
+
+            levelConfig.ammoLimit--;
+            ammoEl.textContent = levelConfig.ammoLimit;
+
+            player.recoilOffset = 8;
+            player.muzzleFlashTimer = 4;
+            triggerScreenShake(3, 2);
+
+            const dx = mousePos.x - player.x;
+            const dy = mousePos.y - player.y;
+            const angle = Math.atan2(dy, dx);
+            
+            const speed = features.highSpeedRounds ? 38 : 20;
+
+            bullets.push({
+                x: player.x + Math.cos(angle) * 25,
+                y: player.y + Math.sin(angle) * 25,
+                prevX: player.x,
+                prevY: player.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 60
+            });
+
+            for (let i = 0; i < 5; i++) {
+                const pAngle = angle + (Math.random() - 0.5) * 0.4;
+                const pSpeed = Math.random() * 5 + 2;
+                particles.push({
+                    x: player.x + Math.cos(angle) * 25,
+                    y: player.y + Math.sin(angle) * 25,
+                    vx: Math.cos(pAngle) * pSpeed,
+                    vy: Math.sin(pAngle) * pSpeed,
+                    radius: Math.random() * 2 + 1,
+                    alpha: 1,
+                    color: '#ffa502'
+                });
+            }
+        }
+
+        // Pointer / Touch Events
+        canvas.addEventListener('mousemove', updateAim);
+        canvas.addEventListener('click', triggerFire);
+
+        canvas.addEventListener('touchstart', (e) => {
+            updateAim(e);
+        }, { passive: true });
+
+        canvas.addEventListener('touchmove', (e) => {
+            updateAim(e);
+        }, { passive: true });
+
+        canvas.addEventListener('touchend', (e) => {
+            triggerFire();
+        }, { passive: true });
+
+        function setupLevel(level, isRetry = false) {
+            currentLevel = level;
+            killsCount = 0;
+
+            if (!isRetry) {
+                if (level >= 5 && features.autoRepair) {
+                    buildingHealth = Math.min(100, buildingHealth + 25);
+                }
+                healthBeforeLevelStart = buildingHealth;
+            } else {
+                buildingHealth = Math.max(50, healthBeforeLevelStart);
+            }
+
+            applyLevelFeatures(level);
+
+            levelConfig.targetKills = 4 + (level * 2);
+            const extraAmmo = level <= 2 ? 7 : 5; 
+            levelConfig.ammoLimit = levelConfig.targetKills + extraAmmo;
+            
+            levelConfig.enemySpeedMin = 1.0 + (level * 0.25);
+            levelConfig.enemySpeedMax = 1.5 + (level * 0.35);
+            levelConfig.spawnRate = Math.max(40, 95 - (level * 8));
+
+            levelEl.textContent = currentLevel;
+            killsEl.textContent = killsCount;
+            targetEl.textContent = levelConfig.targetKills;
+            ammoEl.textContent = levelConfig.ammoLimit;
+            healthEl.textContent = buildingHealth;
+
+            bullets = [];
+            enemies = [];
+            particles = [];
+            enemySpawnTimer = 0;
+            gameRunning = true;
+
+            gameOverScreen.style.display = 'none';
+            levelCompleteScreen.style.display = 'none';
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function applyLevelFeatures(level) {
+            if (level >= 2) features.laserSight = true;
+            if (level >= 3) features.highSpeedRounds = true;
+            if (level >= 4) features.explosiveRounds = true;
+            if (level >= 5) features.autoRepair = true;
+
+            perksUi.innerHTML = '';
+            if (features.laserSight) perksUi.innerHTML += `<div class="perk-badge">🎯 Laser Sight</div>`;
+            if (features.highSpeedRounds) perksUi.innerHTML += `<div class="perk-badge">⚡ High-Speed Rounds</div>`;
+            if (features.explosiveRounds) perksUi.innerHTML += `<div class="perk-badge">💥 Explosive Ammo</div>`;
+            if (features.autoRepair) perksUi.innerHTML += `<div class="perk-badge">🛠️ Auto-Repair Active</div>`;
+        }
+
+        function triggerScreenShake(duration, intensity) {
+            screenShakeTime = duration;
+            screenShakeIntensity = intensity;
+        }
+
+        function spawnEnemy() {
+            const speed = levelConfig.enemySpeedMin + Math.random() * (levelConfig.enemySpeedMax - levelConfig.enemySpeedMin);
+            enemies.push({
+                x: canvas.width + 20,
+                y: groundY - 32,
+                width: 22,
+                height: 32,
+                speed: speed
+            });
+        }
+
+        function createImpactEffect(x, y, color, count = 10) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    radius: Math.random() * 3 + 1,
+                    alpha: 1,
+                    color: color
+                });
+            }
+        }
+
+        function triggerExplosion(x, y) {
+            triggerScreenShake(8, 6);
+            createImpactEffect(x, y, '#ff4757', 25);
+            createImpactEffect(x, y, '#ffa502', 15);
+
+            const explosionRadius = 80;
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                const dist = Math.hypot((e.x + e.width / 2) - x, (e.y + e.height / 2) - y);
+                if (dist <= explosionRadius) {
+                    enemies.splice(i, 1);
+                    killsCount++;
+                    killsEl.textContent = killsCount;
+                }
+            }
+        }
+
+        function update() {
+            if (!gameRunning) return;
+
+            beaconTimer += 0.05;
+
+            const dx = mousePos.x - player.x;
+            const dy = mousePos.y - player.y;
+            player.angle = Math.atan2(dy, dx);
+
+            if (player.recoilOffset > 0) player.recoilOffset *= 0.75;
+            if (player.muzzleFlashTimer > 0) player.muzzleFlashTimer--;
+            if (screenShakeTime > 0) screenShakeTime--;
+
+            const isBulletInFlight = bullets.length > 0;
+
+            if (isBulletInFlight) {
+                statusEl.textContent = "❄️ ENEMIES FROZEN";
+                statusEl.style.color = "#00d2d3";
+            } else {
+                statusEl.textContent = "▶ ENEMIES MOVING";
+                statusEl.style.color = "#10ac84";
+            }
+
+            if (!isBulletInFlight && killsCount < levelConfig.targetKills) {
+                enemySpawnTimer++;
+                if (enemySpawnTimer > levelConfig.spawnRate) {
+                    spawnEnemy();
+                    enemySpawnTimer = 0;
+                }
+            }
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.prevX = b.x;
+                b.prevY = b.y;
+                b.x += b.vx;
+                b.y += b.vy;
+                b.life--;
+
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const e = enemies[j];
+                    if (
+                        b.x > e.x &&
+                        b.x < e.x + e.width &&
+                        b.y > e.y &&
+                        b.y < e.y + e.height
+                    ) {
+                        const hitX = b.x;
+                        const hitY = b.y;
+                        bullets.splice(i, 1);
+
+                        if (features.explosiveRounds) {
+                            triggerExplosion(hitX, hitY);
+                        } else {
+                            createImpactEffect(hitX, hitY, '#ff4757', 12);
+                            enemies.splice(j, 1);
+                            killsCount++;
+                            killsEl.textContent = killsCount;
+                        }
+
+                        if (killsCount >= levelConfig.targetKills) {
+                            gameWin();
+                            return;
+                        }
+                        break;
+                    }
+                }
+
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height || b.life <= 0) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            const remainingPotentialKills = killsCount + bullets.length;
+            if (levelConfig.ammoLimit <= 0 && remainingPotentialKills < levelConfig.targetKills && bullets.length === 0) {
+                gameFail("Out of Ammo! Target not reached.");
+                return;
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+
+                if (!isBulletInFlight) {
+                    e.x -= e.speed;
+                }
+
+                if (e.x <= building.x + building.width) {
+                    createImpactEffect(e.x, e.y + e.height / 2, '#f39c12', 12);
+                    triggerScreenShake(6, 5);
+                    enemies.splice(i, 1);
+                    buildingHealth -= 10;
+                    healthEl.textContent = Math.max(0, buildingHealth);
+
+                    if (buildingHealth <= 0) {
+                        gameFail("Your building was destroyed!");
+                        return;
+                    }
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.15;
+                p.alpha -= 0.03;
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function drawBuilding() {
+            const bx = building.x;
+            const by = building.y;
+            const bw = building.width;
+            const bh = building.height;
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillRect(bx + 15, by + 10, bw, bh);
+
+            const bGradient = ctx.createLinearGradient(bx, by, bx + bw, by);
+            bGradient.addColorStop(0, '#111827');
+            bGradient.addColorStop(0.3, '#1f2937');
+            bGradient.addColorStop(0.7, '#374151');
+            bGradient.addColorStop(1, '#111827');
+            ctx.fillStyle = bGradient;
+            ctx.fillRect(bx, by, bw, bh);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+            for (let px = bx + 20; px < bx + bw; px += 35) {
+                ctx.fillRect(px, by, 12, bh);
+            }
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(bx + bw / 2 - 25, groundY - 50, 50, 50);
+            ctx.fillStyle = '#f59e0b';
+            ctx.fillRect(bx + bw / 2 - 2, groundY - 30, 4, 10);
+
+            const windowCols = 4;
+            const windowRows = 5;
+            const wWidth = 20;
+            const wHeight = 30;
+            const startX = bx + 18;
+            const startY = by + 35;
+            const spacingX = 32;
+            const spacingY = 45;
+
+            for (let r = 0; r < windowRows; r++) {
+                for (let c = 0; c < windowCols; c++) {
+                    const wx = startX + c * spacingX;
+                    const wy = startY + r * spacingY;
+
+                    ctx.fillStyle = 'rgba(245, 158, 11, 0.15)';
+                    ctx.fillRect(wx - 2, wy - 2, wWidth + 4, wHeight + 4);
+
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.fillRect(wx, wy, wWidth, wHeight);
+
+                    ctx.strokeStyle = '#1e293b';
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeRect(wx, wy, wWidth, wHeight);
+                    ctx.beginPath();
+                    ctx.moveTo(wx + wWidth / 2, wy);
+                    ctx.lineTo(wx + wWidth / 2, wy + wHeight);
+                    ctx.stroke();
+                }
+            }
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(bx - 10, by, bw + 20, 10);
+
+            ctx.strokeStyle = '#38ef7d';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(bx + 20, by + 2, bw - 40, 6);
+
+            const beaconX = bx + 15;
+            const beaconY = by - 20;
+            ctx.fillStyle = '#64748b';
+            ctx.fillRect(beaconX - 2, beaconY, 4, 20);
+
+            const alpha = Math.abs(Math.sin(beaconTimer));
+            ctx.fillStyle = `rgba(239, 68, 68, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(beaconX, beaconY, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function draw() {
+            ctx.save();
+
+            if (screenShakeTime > 0) {
+                const rx = (Math.random() - 0.5) * screenShakeIntensity;
+                const ry = (Math.random() - 0.5) * screenShakeIntensity;
+                ctx.translate(rx, ry);
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, groundY, canvas.width, 4);
+
+            drawBuilding();
+
+            if (features.laserSight && gameRunning) {
+                ctx.strokeStyle = 'rgba(255, 71, 87, 0.4)';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([6, 6]);
+                ctx.beginPath();
+                ctx.moveTo(player.x, player.y);
+                ctx.lineTo(mousePos.x, mousePos.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            ctx.save();
+            ctx.translate(player.x, player.y);
+
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(-8, -25, 16, 25);
+            ctx.fillStyle = '#ffedd5';
+            ctx.beginPath();
+            ctx.arc(0, -32, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.rotate(player.angle);
+            const gunX = -player.recoilOffset;
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(gunX, -3, 22, 6);
+
+            if (player.muzzleFlashTimer > 0) {
+                ctx.fillStyle = '#fcf6bd';
+                ctx.beginPath();
+                ctx.arc(gunX + 26, 0, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#ffb703';
+                ctx.beginPath();
+                ctx.arc(gunX + 28, 0, 6, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+
+            bullets.forEach(b => {
+                ctx.strokeStyle = features.explosiveRounds ? '#ff4757' : '#fbbf24';
+                ctx.lineWidth = features.explosiveRounds ? 5 : 3;
+                ctx.beginPath();
+                ctx.moveTo(b.prevX, b.prevY);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+            });
+
+            const isFrozen = bullets.length > 0;
+            enemies.forEach(e => {
+                ctx.save();
+
+                ctx.fillStyle = isFrozen ? '#48dbfb' : '#ef4444';
+                ctx.fillRect(e.x, e.y, e.width, e.height);
+
+                ctx.fillStyle = isFrozen ? '#0abde3' : '#991b1b';
+                ctx.beginPath();
+                ctx.arc(e.x + e.width / 2, e.y - 5, 6, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            });
+
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            if (gameRunning) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function gameWin() {
+            gameRunning = false;
+            
+            const nextLvl = currentLevel + 1;
+            unlockContainer.style.display = 'block';
+
+            if (nextLvl === 2) unlockDesc.textContent = "🎯 Laser Sight Trajectory Line";
+            else if (nextLvl === 3) unlockDesc.textContent = "⚡ High-Speed Velocity Rounds";
+            else if (nextLvl === 4) unlockDesc.textContent = "💥 Explosive Blast Ammo";
+            else if (nextLvl === 5) unlockDesc.textContent = "🛠️ Building Auto-Repair (+25% HP each level)";
+            else unlockContainer.style.display = 'none';
+
+            levelCompleteScreen.style.display = 'flex';
+        }
+
+        function gameFail(reason) {
+            gameRunning = false;
+            failReasonEl.textContent = reason;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function nextLevel() {
+            setupLevel(currentLevel + 1, false);
+        }
+
+        function retryCurrentLevel() {
+            setupLevel(currentLevel, true);
+        }
+
+        function restartFromLevel1() {
+            buildingHealth = 100;
+            healthBeforeLevelStart = 100;
+            features.laserSight = false;
+            features.highSpeedRounds = false;
+            features.explosiveRounds = false;
+            features.autoRepair = false;
+
+            setupLevel(1, false);
+        }
+
+        setupLevel(1, false);
+    </script>
+</body>
+</html>
